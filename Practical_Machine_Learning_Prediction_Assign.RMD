@@ -1,0 +1,142 @@
+---
+title: "Practical_Machine_Learning_Prediction_Assign"
+author: "DaanHoevers"
+date: "Friday, February 20, 2015"
+output: html_document
+---
+
+### Introduction 
+
+This document is written for the course project of the Practical Machine Learning course, part of the Data Science Specialization by John Hopkins University on Coursera. In this project, data is used from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of the project is to predict the manner in which they did the exercise, this is the "classe" variable.
+
+### Data source
+
+The data is obtain from the Groupware@LES which is a group of research and development of groupware technologies. The asked six young health participants to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).[Read More](http://groupware.les.inf.puc-rio.br/har#dataset)
+
+### Exploratory Data Analyses
+
+```{r, echo = TRUE}
+training <- read.csv("pml-training.csv", header = TRUE, na.strings = c("", " ","NA"))
+testing <- read.csv("pml-testing.csv", header = TRUE, na.strings = c("", " ","NA"))
+
+a <- dim(training)
+b <- dim(testing)
+```
+
+The training set given has `r a[1]` rows with `r a[2]` observations, while the testing set has `r b[1]` rows with `r b[2]` observations. This means that of the total data set of `r a[1]+b[1]`, `r round(a[1]/(a[1]+b[1]), 3)` is in the Training set and `r round(b[1]/(a[1]+b[1]), 3)` in the Testing set.
+
+The distribution of class level outcomes in the training set is as follows:
+
+```{r, echo = false}
+barplot(table(training$classe), main = "Classe Outcome Distribution Training set", xlab = "classe levels")
+```
+
+```{r, echo = FALSE}
+x <- apply(training, 2, function(x) any(is.na(x)))
+i <- sum(x)
+```
+
+Of the `r a[2]` observation colums `r i` have NA values included which are therefore not considered useful as predictor and are removed. Also, the first 7 columns contain information about the experiments not considered as an accelerometer predictor and those are also removed. The same is applied to the testing set.
+
+```{r, echo = TRUE}
+training <- training[, !x]
+training <- training[,-c(1:7)]
+dim(training)
+
+testing <- testing[, !x]
+testing <- testing[,-c(1:7)]
+```
+
+### Split Training Data
+
+To further split the Training data set, 80% of the Training set is allocated to the Train set and 20% to a Validation set.
+
+```{r, echo=TRUE}
+library(caret)
+
+inTrain <- createDataPartition(y = training$classe, p = 0.8, list = FALSE)
+
+Train <- training[inTrain,]
+Validation <- training[-inTrain,]
+
+dim(Train)
+dim(Validation)
+```
+
+### Build model using Train data set
+
+To build the model, 3 methods are explored: 
+1. Predicting with trees
+2. Random Forests
+3. Boosting with trees
+
+In order to mitigate the risk of overfitting ***5-fold cross validation*** is used.
+
+```{r, echo=TRUE}
+fit_control <- trainControl(method = "cv", number = 5, allowParallel = TRUE, verboseIter = TRUE)
+
+set.seed(985)## Predicting with Trees
+modFit1 <- train(classe ~ ., data = Train, method = "rpart", trControl = fit_control)
+
+set.seed(986) ## Random Forests
+modFit2 <- train(classe ~ ., data = Train, method = "rf", trControl = fit_control)
+
+set.seed(987) ## Boosting with Trees
+modFit3 <- train(classe ~ ., data = Train, method = "gbm", verbose = FALSE, trControl = fit_control)
+
+
+
+df <- rbind(modFit1$results$Accuracy, 
+            modFit2$results$Accuracy, 
+            head(sort(modFit3$results$Accuracy, decreasing = TRUE), 3))
+rownames(df) <- c("Predicting with Trees", "Random Forests", "Boosting with trees")
+round(df,4)
+```
+
+Based on this overview of accuracies, the Random Forest Model shows the best results with a maximal accuracy of `r round(max(modFit2$results$Accuracy),4)` Disadvantage of this method is that the processing time is longer.
+
+```{r, echo = TRUE}
+modFit2$finalModel ## modFit2 uses to Random Forest Model
+
+varImp(modFit2, scale = FALSE)
+```
+
+The predictors roll_belt, pitch_forarm and yawbelt are the most important variables in the model. A pair scatter plot matrix shows the relation between them and effect on the class outcome, i.e. the colours.
+
+```{r, echo = FALSE}
+featurePlot(x = Train[, c("roll_belt", "pitch_forearm", "yaw_belt")], y = Train$classe, plot = "pairs")
+```
+
+### Evaluate model on Validation data set 
+
+To determine the **out of sample error** the prediction model is applied to an new data set, the sub test set data. 
+
+```{r, echo = TRUE}
+pred <- predict (modFit2, Validation)
+
+conf_mat <- confusionMatrix(pred, Sub_test$classe)
+conf_mat
+```
+
+With an overall accuracy rate of `r conf_mat$overall[1]` and the 95% confidence interval with a lower limit of `r conf_mat$overall[3]` and an upper limit of `r conf_mat$overall[4]`, the model is considered solid.
+
+### Apply model on Testing data set
+
+The model is now applied to the testing data set to obtain the answers which is submitted to the Coursera website.
+
+```{r, echo = TRUE}
+pred2 <- as.character(predict (modFit2, testing))
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred2)
+
+pred2
+```
+All answers were submitted successfully to the Coursera website and all passed.
