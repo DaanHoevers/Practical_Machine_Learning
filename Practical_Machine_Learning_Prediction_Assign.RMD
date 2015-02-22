@@ -27,7 +27,7 @@ The training set given has `r a[1]` rows with `r a[2]` observations, while the t
 
 The distribution of class level outcomes in the training set is as follows:
 
-```{r, echo = false}
+```{r, echo = FALSE}
 barplot(table(training$classe), main = "Classe Outcome Distribution Training set", xlab = "classe levels")
 ```
 
@@ -66,11 +66,12 @@ dim(Validation)
 ### Build model using Train data set
 
 To build the model, 3 methods are explored: 
-1. Predicting with trees
-2. Random Forests
-3. Boosting with trees
 
-In order to mitigate the risk of overfitting ***5-fold cross validation*** is used.
+1. Predicting with trees, method is 'rpart' 
+2. Random Forests, method is 'rf'
+3. Boosting with trees, method is 'gbm'
+
+In order to mitigate the risk of overfitting **5-fold cross validation** is used.
 
 ```{r, echo=TRUE}
 fit_control <- trainControl(method = "cv", number = 5, allowParallel = TRUE, verboseIter = TRUE)
@@ -83,8 +84,6 @@ modFit2 <- train(classe ~ ., data = Train, method = "rf", trControl = fit_contro
 
 set.seed(987) ## Boosting with Trees
 modFit3 <- train(classe ~ ., data = Train, method = "gbm", verbose = FALSE, trControl = fit_control)
-
-
 
 df <- rbind(modFit1$results$Accuracy, 
             modFit2$results$Accuracy, 
@@ -114,7 +113,7 @@ To determine the **out of sample error** the prediction model is applied to an n
 ```{r, echo = TRUE}
 pred <- predict (modFit2, Validation)
 
-conf_mat <- confusionMatrix(pred, Sub_test$classe)
+conf_mat <- confusionMatrix(pred, Validation$classe)
 conf_mat
 ```
 
